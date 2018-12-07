@@ -1,0 +1,103 @@
+--In the Informatica PRD Linux machine
+
+cd /informatica  
+mkdir SURVEY
+cd SURVEY
+mkdir Log
+mkdir Archive
+mkdir Data
+mkdir Image
+
+--copy all files to /informatica/SURVEY
+  common.py
+  config.json
+  dailyOnlineSurvey.sh
+  DemographicSurveyDDL.sql
+  DemographicSurveyLovData.sql
+  manageFtp.py
+  monthlyPaperSurvey.sh
+  onlineForProd.dat
+  paperForProd.dat
+  parseOnlineSurvey.py
+  parsePaperSurvey.py
+  passwordEncrypt.py
+
+--In Oracle run:
+DemographicSurveyDDL.sql -- creates all object
+DemographicSurveyLOV.sql -- populates the lookup table
+--Check that 202 rows loaded
+SELECT * FROM demographic_survey_lov;
+	
+--Load existing Test records into Prod
+at Linux command prompt:
+sqlldr userid=anaprd@anaprd control=onlineForProd.dat log=onlineLoader.log	--upp3r38st
+sqlldr userid=anaprd@anaprd control=paperForProd.dat log=paperLoader.log	--upp3r38st
+
+SELECT COUNT(*) from demographic_survey_online_d; 
+--7272 expected
+SELECT COUNT(*) from demographic_survey_paper_d;
+--888 expected
+
+
+--Confirm that all Python packages are installed:
+--  From python prompt run: pip list
+--  The list should include:
+    ast
+    calendar
+    cx_Oracle
+    datetime
+    json
+    logging
+    os
+    paramiko
+    re
+	requests
+    rsa
+    sys
+    time
+    xmltodict
+
+--If a package is missing:
+  pip --proxy http://informatica:pass@bcpxy.nycnet:8080 install package_name
+  
+--Generate a private key pem file ""privateKey.pem"
+python passwordEncrypt.py -type RESET  
+
+--Encrypt the Oracle password
+python passwordEncrypt.py SET -password ActualPassword
+--copy the result into the config.json file.
+--Repeat for the Linux password
+
+--Confirm paths in config.json are correct
+
+--Confirm installation is OK
+python parsePaperSurvey
+
+-- See how many were loaded
+SELECT * FROM demographic_survey_paper_d
+WHERE create_dt > sysdate -1;
+--Remove test rows
+delete from demographic_survey_paper_d
+where create_dt > sysdate -1;
+
+python parseOnlineSurvey.py
+-- See how many were loaded
+SELECT *
+FROM demographic_survey_online_d
+WHERE create_dt > sysdate -1;
+--Remove test rows
+delete from demographic_survey_online_d
+where create_dt > sysdate -1;
+
+--Check that the view is OK
+SELECT * FROM demographic_survey_online_d;
+--Should be 7788 rows for age & ZIP have been filtered out
+
+--Schedule dailyOnlineSurvey.sh to run every night (at a convenient time)
+--Every day at 2 AM
+0 0 14 * * /home/scripts/demographics_survey/dailyOnlineSurvey.sh
+--Schedule monthlyPaperSurvey.sh to run every month on the evening of the 16th
+--Once a month on the 16th at 3 AM
+0 0 0 16 15 /home/scripts/demographics_survey/monthlyPaperSurvey.sh
+
+

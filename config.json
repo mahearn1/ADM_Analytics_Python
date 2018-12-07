@@ -1,0 +1,43 @@
+{
+    "db": {
+        "user": "anaprd", 
+        "passwd": "Huulni6p+5JtB89b1eRYYU/GLb6hFbOGcQ/VQPV/aQ+tYhMXSJO+Nuf8qPYLJykaSUbP2tGSHAhtkBp8lIezEQ==",
+        "database": "anadev"
+    },
+    "linux":{
+		"proxy":"bcpxy.nycnet:8080",
+        "linuxUser":"informatica",
+        "linuxPasswd": "blrE7HYDwhechodZQA4vmmwWr0F53SvBmT5NbEKHSxSctGilYp8hAiHIwRenOvw+wFdSwxOF45KXJcVkIAzghQ=="
+    },
+    "surveygizmo": {
+        "api_token": "9143c5b46c75acd535c6b0878965cf3657ad25520d35db9c92&", 
+        "api_token_secret": "A9ktgq2mVJMtQ&",
+        "last_run_date":"", 
+        "results_per_page":"50",
+        "survey_number":"50003666", 
+        "max_surv_index": 402, 
+        "start_index": 10000,
+		"max_dups_allowed": 6,
+		"index_increment": 2000
+    }, 
+    "logging": {
+        "file_name": "demographics_survey", 
+        "path": "log", 
+        "level": "INFO"
+    }, 
+    "sftp": {
+        "host": "securetransport.csc.nycnet", 
+        "user_name": "Caso_Survey_DoITT_Internal", 
+        "password": "CasoC450",
+		"ftp_dir": "",
+		"file_extension": "xml",
+		"image_extension": "tif",
+		"archive_dir": "c:\\Projects\\SurveyGizmo\\Deploy\\Archive\\",
+		"remoteImage_path": "c:\\Projects\\SurveyGizmo\\Deploy\\",
+		"fileDownload_path" : "c:\\Projects\\SurveyGizmo\\Deploy\\Data\\",
+		"imageDownload_path" : "c:\\Projects\\SurveyGizmo\\Deploy\\Images\\",
+		"survey_date": "30 Jul 2022",
+        "load_without_images": "No"
+    }
+}
+
