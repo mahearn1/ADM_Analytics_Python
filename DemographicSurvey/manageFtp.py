@@ -43,7 +43,9 @@ def get_file_from_sftp(pSrv, pFileName, pLastModified, pFileDownloadDir, pLatest
         archive_dir = common.read_config_file("sftp","archive_dir")
         file_name = pFileName
         
-        if pLastModified <= pLatestSurveyDate:
+
+        #if pLastModified >= pLatestSurveyDate:
+        if 1==1:
             #Only pull XML files with right extention
             xmlFileFound = re.search(".*\."+ pPaperSurveyExtension + "$", file_name)
             if xmlFileFound:
@@ -69,8 +71,10 @@ def get_file_from_sftp(pSrv, pFileName, pLastModified, pFileDownloadDir, pLatest
         logging.error('getFileFromFTP invalid date: ' + str(pFtpObject.st_mtime))
 
 
-def get_files(pCursor):
+def get_files(pCursor, pMaxNumberOfFiles):
     global fileList
+
+    fileList = []
 
     # Find current max survey date    
     max_survey_date = common.get_max_papersurvey_date(pCursor)
@@ -97,8 +101,7 @@ def get_files(pCursor):
         sftp.chdir(ftp_dir)
     except:
         logging.error('Invalid FTP path: '+ ftp_dir)
-        sys.exit(-1)
-    rerunSurveyDate = datetime.strptime(rerunDate, '%d %b %Y')
+        sys.exit(-1)  
     
     if rerunDate:
         # Use config file to set date to pull files
@@ -113,11 +116,15 @@ def get_files(pCursor):
     latestSurveyDate = rerunSurveyDate.strftime('%Y%m%d')
     
     # List the files
+    fileCount = 0
     for fileName in sftp.listdir(ftp_dir):
+        if fileCount > pMaxNumberOfFiles:
+            break
         #Process each file, get modified date
         utime = sftp.stat(fileName).st_mtime
         last_modified = datetime.fromtimestamp(utime)
         get_file_from_sftp(sftp, fileName, last_modified, localDownload_dir, rerunSurveyDate, paperSurveyExtension, imageDownloadDir, imageExtension, loadFileWithoutImages)
+        fileCount += 1
 
     # Close the connection
     sftp.close()
@@ -147,13 +154,20 @@ def delete_files_from_sftp(pFileList, pArchiveDirectory):
 
     for fileName in pFileList:
         # If the survey XML exists in the archive, delete the SFTP version
-        if os.path.isfile(pArchiveDirectory + fileName):
-            sftp.remove(fileName)
+        try:
+            if os.path.isfile(pArchiveDirectory + fileName):
+                sftp.remove(fileName)
+        except:
+            logging.error('Cannot delete: '+ fileName)
+            
 
     for fileName in imageFileList:
         # If the survey iamge exists in the archive, delete the SFTP version
         if os.path.isfile(imageDownloadDir + fileName):
-            sftp.remove(fileName)
+            try:
+                sftp.remove(fileName)
+            except:
+                print ''
     
                 
 def check_sftp_counts():

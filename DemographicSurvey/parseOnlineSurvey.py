@@ -30,6 +30,7 @@ loopEnd = 0
 currentSurveyPage = 1
 totalDuplicates = 0
 sequenceNumber = 0
+lastRunDate = None
 
 
     
@@ -110,7 +111,6 @@ def get_last_run_date(pCursor, pSurveyNumber):
             logging.fatal('Get Max Survey Date Error. Survey #: ' + pSurveyNumber)
         # Every other time       
         return  maxDate[0]
-
 
 
 def check_for_dupes(pCursor, pSession, pSurveyTime):
@@ -204,6 +204,7 @@ def parse_api():
     global currentSurveyPage
     global totalDuplicates
     global sequenceNumber
+    global lastRunDate
     surveyId = 0
     surveyInstanceId = 0
     surveySession = ""
@@ -246,7 +247,8 @@ def parse_api():
     lov = rows_to_dict_list(cursor)
 
     # Used to set the Where clause of the API to return only new surveys
-    lastRunDate = get_last_run_date(cursor, str(surveyNumber))
+    if currentSurveyPage  < 2:
+        lastRunDate = get_last_run_date(cursor, str(surveyNumber))
 
     # SurveyGizmo uses a range of indexes in their JSON. Usually 1-"max_surv_index"
     # Without this limit, code needs to loop through non-exisitent indexes looking for data
@@ -517,8 +519,6 @@ def main():
     startTime = datetime.datetime.today()
     startTimeStr = startTime.strftime("%Y%m%d %H:%M:%S")
     logging.info('Started ' + startTimeStr )
-
-
         
     while True :
         rerunParse = parse_api()
