@@ -11,11 +11,16 @@ from base64 import b64encode, b64decode
 
 ##################
 #
+# CREATED BY  :  Mark Ahearn
 # CREATED DATE:  06/04/2018
 # DESCRIPTION :  Common routines for Demographics Surveys
 #                Online and Paper version
 #
 ##################
+
+
+def timing(pModule):
+    logging.info('Start ' + pModule + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 
 def decryptPassword(pEncryptedPassword):

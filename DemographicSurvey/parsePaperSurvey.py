@@ -10,11 +10,13 @@ import cx_Oracle
 import rsa
 import re
 import common
+import paramiko
 from base64 import b64encode, b64decode
 from manageFtp import get_files
 from manageFtp import archive_file
 from manageFtp import delete_files_from_sftp
 from manageFtp import check_sftp_counts
+from manageFtp import moveImagesFromSFTP
  
 
 ##################
@@ -46,8 +48,7 @@ def get_next_primary_key(pCursor):
     except Exception, err:
         logging.error('Get Prime Key Error: ' + str(err))
         return None
-
-
+    
 def compare_survey_file_name(pCursor, pFileName):
     try:
         sql = "SELECT 1 FROM anaprd.demographic_survey_paper_d WHERE UPPER(survey_file_name) = '" + pFileName.upper() + "' AND rownum < 2"
@@ -102,15 +103,16 @@ def get_open_answer(pLov, pQuestion, pAnswer):
 def validateDate(pDate):
     # Check that number is in the format '01022018'
     try:
-        date = datetime.strptime(pDate, '%d%m%Y').strftime('%m/%d/%Y')
+        date = datetime.datetime.strptime(pDate, '%m%d%Y')
     except:
         # If the date input is bad, return today's date
         now = datetime.datetime.now()
-        return now.strftime("%d%m%Y")
+        return now.strftime("%m%d%Y")
     return pDate
 
 
 def parse_XML():
+    fileList = []
     surveyId = 0
     surveyInstanceId = 0
     surveySession = ""
@@ -130,10 +132,12 @@ def parse_XML():
     total_survey_count = 0
     lastBatchNo = ''
     archive_dir = ''
+    totalAlreadyLoaded = 0
     addSurveyDetail = "INSERT INTO demographic_survey_paper_d(id,survey_number,survey_instance_id,survey_status,survey_language,question,answer, answer_is_optional, data_source, survey_file_name, image_file_name) VALUES(:id,:survey_number,:survey_instance_id,:survey_status,:survey_language,:question,:answer, :answer_is_optional, :data_source, :survey_file_name, :image_file_name)" 
    
     localDownload_dir = common.read_config_file("sftp","fileDownload_path")
     archive_dir = common.read_config_file("sftp","archive_dir")
+    
     try:
         user = common.read_config_file("db","user")
         password = common.read_config_file("db","passwd")
@@ -144,6 +148,20 @@ def parse_XML():
     except Exception, e:
         logging.error('Cursor Error: ' + e.message )
 
+
+    # SFTP info
+    # Get values from the config file
+    hostStr = common.read_config_file("sftp","host")
+    userName = common.read_config_file("sftp","user_name")
+    passWord = common.read_config_file("sftp","password")
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(hostStr, username=userName, password=passWord)
+    sftp = client.open_sftp()
+
+    
     sequenceNumber = get_next_primary_key(cursor)
 
     if sequenceNumber is None:
@@ -155,25 +173,43 @@ def parse_XML():
     startTimeStr = startTime.strftime("%Y%m%d %H:%M:%S")
     logging.info('Started Paper ' + startTimeStr )
 
-    fileCountsOK = check_sftp_counts()
-    if fileCountsOK:
-        # Retrieve data from demographic_survey_lov
-        lov = rows_to_dict_list(cursor)
+    
+    # Get files from Axway SFTP site
+    MaxNumberOfFiles = common.read_config_file("sftp","max_number_of_files")
+    moveImagesFromSFTP(sftp, MaxNumberOfFiles)
+    
+    
+    fileCountsOK = check_sftp_counts(sftp)
+    
+    # Retrieve data from demographic_survey_lov
+    lov = rows_to_dict_list(cursor)
 
-        # Get files from Axway SFTP site
-        MaxNumberOfFiles = common.read_config_file("sftp","max_number_of_files")
+    continueLoading = True
+    while continueLoading:
+        
+
         # SFTP locks if too many files in SFTP folder
         moreFileToDownload = 'Y'
         while moreFileToDownload == 'Y':
-            file_name_list = get_files(cursor, MaxNumberOfFiles)
+            # Clear out the files in the list
+            del fileList[:]
+            file_name_list = get_files(fileList, sftp, cursor, MaxNumberOfFiles)
+            
             if len(file_name_list) == 0 :
                 moreFileToDownload = 'N'
-                continue 
+                continueLoading = False
+                continue
 
             lookedupAnswer = ''
             optionalAnswer = ''
+
             for surveyFileName in file_name_list:
+         
                 if compare_survey_file_name(cursor, surveyFileName) == 1:
+                    if totalAlreadyLoaded > 5:
+                        continueLoading = False
+                        moreFileToDownload = 'N'
+                    totalAlreadyLoaded += 1
                     logging.error('File has been loaded already: ' + surveyFileName)
                 else:
                     # File not previously loaded, proceed.
@@ -188,7 +224,8 @@ def parse_XML():
                         res2 = res["Record"]
                         field = res2["Field"]
                         surveyIndex = 0
-                        
+
+                   
                         try:
                             # initilize existing values so they don't flop into the next record.
                             imagePath = ''
@@ -201,7 +238,7 @@ def parse_XML():
                             
                             while field[surveyIndex]:
                                 skipInsert = False
-
+                            
                                 if field[surveyIndex]['@id'] == 'None':
                                    print 'FOUND NONE'
                                 
@@ -333,6 +370,7 @@ def parse_XML():
                         fd.close()
 
                         archive_file(surveyFileName,localDownload_dir, archive_dir)
+                        delete_files_from_sftp(sftp, surveyFileName, archive_dir)
                                                                     
                     # A special case:
                     #   Paper survey Zipcode
@@ -423,8 +461,9 @@ def parse_XML():
                         except  Exception, err:
                             logging.error('UpdateB error: '+ str(err.message))
                 cursor.execute('COMMIT')
-                delete_files_from_sftp(file_name_list, archive_dir)
-
+        # Close the connection
+    sftp.close()
+    
     endTime = datetime.datetime.today()
     endTimeStr = endTime.strftime("%Y%m%d %H:%M:%S")
     elaspedTime = common.get_time_difference(startTime,endTime)
